@@ -42,7 +42,6 @@ QLabel {
 """
 
 class PreguntaPrueba:
-    """Estructura nativa de Python para manejar las preguntas."""
     def __init__(self, tipo, subtema, texto, respuesta_correcta, opciones=None):
         self.tipo = tipo 
         self.subtema = subtema
@@ -64,31 +63,26 @@ class PantallaInicio(QWidget):
         self.titulo.setStyleSheet("color: #d4b3ff; font-size: 55px; font-weight: bold; margin-top: 0px;")
         layout.addWidget(self.titulo)
         
-        # Variables para la animación del título
         self.offset_y = 0
         self.direccion_anim = 1
         self.timer_anim = QTimer(self)
         self.timer_anim.timeout.connect(self.animar_titulo)
         self.timer_anim.start(60)
         
-        # Instrucciones
         self.label_instruccion = QLabel("Escribe tu tema (solo matemáticas)")
         self.label_instruccion.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.label_instruccion)
         
-        # Campo de Tema
         self.input_tema = QLineEdit()
         self.input_tema.setPlaceholderText("Ejemplo: Álgebra")
         self.input_tema.setFixedWidth(400)
         layout.addWidget(self.input_tema, alignment=Qt.AlignCenter)
         
-        # Campo de Puntos (Subtemas)
         self.input_puntos = QLineEdit()
-        self.input_puntos.setPlaceholderText("Puntos (Ej: Ecuaciones, Sumas, Geometría)")
+        self.input_puntos.setPlaceholderText("Ej: PARTE 1: Sumas, PARTE 2: Restas")
         self.input_puntos.setFixedWidth(400)
         layout.addWidget(self.input_puntos, alignment=Qt.AlignCenter)
         
-        # Botón Empezar
         self.btn_empezar = QPushButton("Comenzar")
         self.btn_empezar.setCursor(QCursor(Qt.PointingHandCursor))
         self.btn_empezar.setFixedWidth(200)
@@ -122,11 +116,14 @@ class PantallaInicio(QWidget):
             
         self.input_tema.setStyleSheet("")
         self.input_puntos.setStyleSheet("")
-        self.label_instruccion.setText("Escribe tu tema (solo matemáticas)")
-        self.label_instruccion.setStyleSheet("color: #e0ccff;")
         
-        subtemas = [s.strip() for s in puntos_str.split(',') if s.strip()]
-        self.main_app.iniciar_flujo(tema, subtemas)
+        # Procesar partes si el usuario escribió "PARTE X:"
+        subtemas_procesados = []
+        partes_brutas = puntos_str.split(',')
+        for parte in partes_brutas:
+            subtemas_procesados.append(parte.strip())
+            
+        self.main_app.iniciar_flujo(tema, subtemas_procesados)
 
 class PantallaCarga1(QWidget):
     def __init__(self, main_app):
@@ -135,7 +132,7 @@ class PantallaCarga1(QWidget):
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignCenter)
         
-        self.poema = QLabel("En la línea de la vida,\nbusco siempre la ecuación;\nsi mi mente está perdida,\ntú eres mi solución.")
+        self.poema = QLabel("El éxito es la suma\nde pequeños esfuerzos\nrepetidos\ndía tras día.")
         self.poema.setAlignment(Qt.AlignCenter)
         self.poema.setStyleSheet("font-size: 26px; font-style: italic; color: #b380ff; line-height: 1.5;")
         layout.addWidget(self.poema)
@@ -148,25 +145,30 @@ class PantallaMinijuegos(QWidget):
     def __init__(self, main_app):
         super().__init__()
         self.main_app = main_app
-        self.palabra_secreta = ""
+        self.nivel_maximo_desbloqueado = 1
+        self.nivel_actual = 1
+        self.preguntas_nivel = []
+        self.respuestas_usuario = []
+        self.errores_nivel = []
+        self.indice_pregunta = 0
+        self.fase_animacion = 0
+        self.rotacion_partes = 0 # Para alternar y retroceder orden de partes
         
         layout_principal = QVBoxLayout()
         
-        # Barra superior con botón finalizar
         barra_superior = QHBoxLayout()
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         barra_superior.addItem(spacer)
         
-        self.btn_finalizar = QPushButton("Finalizar")
+        self.btn_finalizar = QPushButton("Ir al Examen Final")
         self.btn_finalizar.setCursor(QCursor(Qt.PointingHandCursor))
         self.btn_finalizar.clicked.connect(self.ir_a_carga_examen)
         barra_superior.addWidget(self.btn_finalizar)
         layout_principal.addLayout(barra_superior)
         
-        # Contenido
         layout_centro = QVBoxLayout()
         layout_centro.setAlignment(Qt.AlignCenter)
-        self.titulo = QLabel("Área de Práctica y Minijuegos")
+        self.titulo = QLabel("Área de Entrenamiento")
         self.titulo.setStyleSheet("font-size: 30px; font-weight: bold;")
         self.titulo.setAlignment(Qt.AlignCenter)
         layout_centro.addWidget(self.titulo)
@@ -174,43 +176,281 @@ class PantallaMinijuegos(QWidget):
         self.info_temas = QLabel("")
         self.info_temas.setAlignment(Qt.AlignCenter)
         self.info_temas.setStyleSheet("font-size: 20px; margin: 20px 0;")
+        self.info_temas.setWordWrap(True)
         layout_centro.addWidget(self.info_temas)
         
-        # NUEVO: Layout dinámico para poner botones o barras de texto según el minijuego
         self.layout_dinamico_juego = QVBoxLayout()
+        self.layout_dinamico_juego.setAlignment(Qt.AlignCenter)
         layout_centro.addLayout(self.layout_dinamico_juego)
         
-        self.btn_jugar = QPushButton("Jugar")
+        self.btn_jugar = QPushButton("Acción")
         self.btn_jugar.setCursor(QCursor(Qt.PointingHandCursor))
         self.btn_jugar.setFixedWidth(300)
-        self.btn_jugar.clicked.connect(self.iniciar_minijuego)
+        self.btn_jugar.setVisible(False)
         layout_centro.addWidget(self.btn_jugar, alignment=Qt.AlignCenter)
         
         layout_principal.addLayout(layout_centro)
         self.setLayout(layout_principal)
 
     def preparar(self, subtemas):
-        self.info_temas.setText(f"Temas a repasar hoy:\n{', '.join(subtemas)}\n\n¡Presiona el botón para jugar!")
-        self.btn_jugar.setText("Iniciar Minijuego Aleatorio")
-        self.limpiar_layout_juego()
-        self.btn_jugar.setVisible(True)
+        self.nivel_maximo_desbloqueado = 1
+        self.rotacion_partes = 0
+        self.mostrar_mapa_niveles()
 
     def limpiar_layout_juego(self):
-        """Elimina la barra de texto o los botones del minijuego anterior."""
         while self.layout_dinamico_juego.count():
             child = self.layout_dinamico_juego.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
-    def iniciar_minijuego(self):
-        """Elige un minijuego aleatorio."""
+    def obtener_punto_actual_rotado(self, indice_nivel):
         subtemas = self.main_app.subtemas_actuales
         if not subtemas:
+            return self.main_app.tema_actual
+        # Aplicar lógica de rotación y retroceso entre partes ingresadas
+        idx = (indice_nivel + self.rotacion_partes) % len(subtemas)
+        return subtemas[idx]
+
+    def mostrar_mapa_niveles(self):
+        self.limpiar_layout_juego()
+        self.btn_jugar.setVisible(False)
+        self.titulo.setText("Mapa de Niveles - Relajante")
+        self.info_temas.setText("Selecciona un nivel disponible para entrenar tu mente con tranquilidad.")
+        
+        total_niveles = max(4, len(self.main_app.subtemas_actuales))
+        
+        for i in range(1, total_niveles + 1):
+            btn_nivel = QPushButton(f"Nivel {i}")
+            if i <= self.nivel_maximo_desbloqueado:
+                btn_nivel.setStyleSheet("background-color: #3b1066; border: 2px solid #5a1a99; color: white;")
+                btn_nivel.setCursor(QCursor(Qt.PointingHandCursor))
+                btn_nivel.clicked.connect(lambda checked, n=i: self.mostrar_cuadro_teoria(n))
+            else:
+                btn_nivel.setStyleSheet("background-color: #150524; color: #442266; border: 2px solid #22083b;")
+                btn_nivel.setEnabled(False)
+                
+            self.layout_dinamico_juego.addWidget(btn_nivel)
+            
+            if i < total_niveles:
+                linea = QLabel("   |   ")
+                linea.setAlignment(Qt.AlignCenter)
+                if i < self.nivel_maximo_desbloqueado:
+                    linea.setStyleSheet("color: #b380ff; font-weight: bold;")
+                else:
+                    linea.setStyleSheet("color: #22083b;")
+                if i == self.nivel_maximo_desbloqueado:
+                    self.linea_animacion = linea
+                self.layout_dinamico_juego.addWidget(linea)
+
+    def mostrar_cuadro_teoria(self, nivel):
+        self.nivel_actual = nivel
+        self.limpiar_layout_juego()
+        self.titulo.setText(f"Estudio - Nivel {nivel}")
+        
+        punto_asignado = self.obtener_punto_actual_rotado(nivel - 1)
+        
+        # Cuadro flotante con diseño relajante
+        texto_teoria = f"┌────────────────────────────────────────┐\n" \
+                       f"│ ESTUDIA ESTO CON CALMA:                │\n" \
+                       f"│                                        │\n" \
+                       f"│ Tema: {punto_asignado:<24} │\n" \
+                       f"│                                        │\n" \
+                       f"│ Comprende la lógica antes de avanzar. │\n" \
+                       f"└────────────────────────────────────────┘"
+        
+        self.info_temas.setText(texto_teoria)
+        self.info_temas.setStyleSheet("font-family: monospace; font-size: 16px; color: #d4b3ff; background-color: #150524; padding: 15px; border-radius: 10px; border: 1px solid #5a1a99;")
+        
+        self.btn_jugar.setText("Listo")
+        try: self.btn_jugar.clicked.disconnect() 
+        except: pass
+        self.btn_jugar.clicked.connect(self.preparar_preguntas_nivel)
+        self.btn_jugar.setVisible(True)
+
+    def preparar_preguntas_nivel(self):
+        self.preguntas_nivel = []
+        self.respuestas_usuario = []
+        self.errores_nivel = []
+        self.indice_pregunta = 0
+        self.btn_jugar.setVisible(False)
+        self.info_temas.setStyleSheet("font-size: 20px; margin: 20px 0; color: #e0ccff; background: transparent; border: none;")
+        
+        tema = self.main_app.tema_actual
+        punto_actual = self.obtener_punto_actual_rotado(self.nivel_actual - 1)
+
+        if self.nivel_actual == 1:
+            # Nivel 1: Verdadero y Falso sobre el punto asignado
+            for _ in range(3):
+                num = random.randint(2, 10)
+                self.preguntas_nivel.append(PreguntaPrueba('vf', punto_actual, f"¿En '{punto_actual}', el factor lógico base guarda relación con el número {num}?", "Verdadero", ["Verdadero", "Falso"]))
+        
+        elif self.nivel_actual == 2:
+            # Nivel 2: Preguntas básicas
+            for _ in range(3):
+                self.preguntas_nivel.append(PreguntaPrueba('abierta', punto_actual, f"Basándote en '{punto_actual}', ¿cuál es el resultado operativo básico si base=4 y sumamos 6?", "10"))
+        
+        elif self.nivel_actual == 3:
+            # Nivel 3: ¿Qué es? (AHORA ES DE ESCRIBIR, NO DE ELEGIR)
+            for _ in range(2):
+                self.preguntas_nivel.append(PreguntaPrueba('abierta', punto_actual, f"Escribe con tus palabras qué es '{punto_actual}':", f"es el estudio de {tema.lower()}"))
+        
+        elif self.nivel_actual == 4:
+            # Nivel 4: Ejercicios con procedimiento
+            for _ in range(2):
+                self.preguntas_nivel.append(PreguntaPrueba('procedimiento', punto_actual, f"Resuelve con procedimiento para '{punto_actual}' (formato: paso a paso -> resultado 5):", "5"))
+        else:
+            # Niveles extra
+            self.iniciar_minijuego_clasico()
+            return
+
+        self.mostrar_pregunta_actual()
+
+    def mostrar_pregunta_actual(self):
+        if self.indice_pregunta >= len(self.preguntas_nivel):
+            self.evaluar_nivel()
             return
             
-        tema_elegido = random.choice(subtemas).upper()
-        self.btn_jugar.setVisible(False)
         self.limpiar_layout_juego()
+        pregunta = self.preguntas_nivel[self.indice_pregunta]
+        self.info_temas.setText(f"Pregunta {self.indice_pregunta + 1}/{len(self.preguntas_nivel)}\n\n{pregunta.texto}")
+        
+        if pregunta.tipo == 'vf':
+            for opcion in pregunta.opciones:
+                btn = QPushButton(opcion)
+                btn.setCursor(QCursor(Qt.PointingHandCursor))
+                btn.clicked.connect(lambda checked, o=opcion: self.registrar_respuesta(o))
+                self.layout_dinamico_juego.addWidget(btn)
+                
+        elif pregunta.tipo == 'abierta' or pregunta.tipo == 'procedimiento':
+            self.input_juego = QLineEdit()
+            if pregunta.tipo == 'procedimiento':
+                self.input_juego.setPlaceholderText("Escribe procedimiento y resultado...")
+            else:
+                self.input_juego.setPlaceholderText("Escribe tu respuesta aquí...")
+            self.input_juego.setFixedWidth(450)
+            self.input_juego.setAlignment(Qt.AlignCenter)
+            self.input_juego.returnPressed.connect(self.procesar_input_nivel)
+            self.layout_dinamico_juego.addWidget(self.input_juego, alignment=Qt.AlignCenter)
+            self.input_juego.setFocus()
+            
+            btn_ok = QPushButton("Siguiente")
+            btn_ok.setCursor(QCursor(Qt.PointingHandCursor))
+            btn_ok.clicked.connect(self.procesar_input_nivel)
+            self.layout_dinamico_juego.addWidget(btn_ok, alignment=Qt.AlignCenter)
+
+    def procesar_input_nivel(self):
+        if hasattr(self, 'input_juego'):
+            respuesta = self.input_juego.text().strip()
+            if respuesta:
+                self.registrar_respuesta(respuesta)
+
+    def registrar_respuesta(self, respuesta):
+        pregunta = self.preguntas_nivel[self.indice_pregunta]
+        # No se muestra feedback inmediato, solo se guarda
+        self.respuestas_usuario.append({'pregunta': pregunta, 'respuesta': respuesta})
+        self.indice_pregunta += 1
+        self.mostrar_pregunta_actual()
+
+    def evaluar_nivel(self):
+        self.limpiar_layout_juego()
+        self.titulo.setText(f"Resultados - Nivel {self.nivel_actual}")
+        
+        self.errores_nivel = []
+        for item in self.respuestas_usuario:
+            p = item['pregunta']
+            r = item['respuesta']
+            correcta = False
+            
+            if p.tipo == 'procedimiento':
+                if p.respuesta_correcta in r and len(r) > 3:
+                    correcta = True
+            elif p.tipo == 'abierta' and "qué es" in p.texto.lower():
+                # Validación flexible para definición escrita
+                if len(r) > 2:
+                    correcta = True
+            else:
+                if r.lower() == p.respuesta_correcta.lower():
+                    correcta = True
+                    
+            if not correcta:
+                self.errores_nivel.append(p)
+                
+        if len(self.errores_nivel) == 0:
+            self.info_temas.setText("¡Excelente nivel superado con total calma y precisión!")
+            if self.nivel_actual == self.nivel_maximo_desbloqueado:
+                self.nivel_maximo_desbloqueado += 1
+                self.btn_jugar.setText("Siguiente Nivel")
+                try: self.btn_jugar.clicked.disconnect() 
+                except: pass
+                self.btn_jugar.clicked.connect(self.animar_progreso)
+                self.btn_jugar.setVisible(True)
+            else:
+                self.btn_jugar.setText("Volver al Mapa")
+                try: self.btn_jugar.clicked.disconnect() 
+                except: pass
+                self.btn_jugar.clicked.connect(self.mostrar_mapa_niveles)
+                self.btn_jugar.setVisible(True)
+        else:
+            texto_error = "En donde fallaste:\n\n"
+            for err in self.errores_nivel:
+                texto_error += f"- {err.texto}\n"
+            texto_error += "\n¿Qué deseas hacer?"
+            self.info_temas.setText(texto_error)
+            
+            btn_reiniciar = QPushButton("Reiniciar lo que falló")
+            btn_reiniciar.setCursor(QCursor(Qt.PointingHandCursor))
+            btn_reiniciar.clicked.connect(self.reiniciar_fallos)
+            self.layout_dinamico_juego.addWidget(btn_reiniciar)
+            
+            btn_seguir = QPushButton("Seguir a los demás niveles")
+            btn_seguir.setStyleSheet("background-color: #2a0b4d; color: #a366ff;")
+            btn_seguir.setCursor(QCursor(Qt.PointingHandCursor))
+            btn_seguir.clicked.connect(self.forzar_siguiente_nivel)
+            self.layout_dinamico_juego.addWidget(btn_seguir)
+
+    def reiniciar_fallos(self):
+        self.preguntas_nivel = self.errores_nivel
+        self.errores_nivel = []
+        self.respuestas_usuario = []
+        self.indice_pregunta = 0
+        self.mostrar_pregunta_actual()
+        
+    def forzar_siguiente_nivel(self):
+        if self.nivel_actual == self.nivel_maximo_desbloqueado:
+            self.nivel_maximo_desbloqueado += 1
+        self.animar_progreso()
+
+    def animar_progreso(self):
+        self.mostrar_mapa_niveles()
+        self.fase_animacion = 0
+        self.timer_linea = QTimer(self)
+        self.timer_linea.timeout.connect(self.paso_animacion)
+        self.timer_linea.start(200)
+        
+    def paso_animacion(self):
+        self.fase_animacion += 1
+        if hasattr(self, 'linea_animacion'):
+            if self.fase_animacion == 1:
+                self.linea_animacion.setText("   ↓   ")
+                self.linea_animacion.setStyleSheet("color: #a366ff; font-weight: bold;")
+            elif self.fase_animacion == 2:
+                # Animación de retroceso/rotación de partes al avanzar
+                self.rotacion_partes += 1
+                self.linea_animacion.setText("   ◄   ")
+            elif self.fase_animacion > 2:
+                self.linea_animacion.setText("   |   ")
+                self.linea_animacion.setStyleSheet("color: #b380ff; font-weight: bold;")
+                self.timer_linea.stop()
+                
+                self.btn_jugar.setText(f"Empezar Nivel {self.nivel_maximo_desbloqueado}")
+                try: self.btn_jugar.clicked.disconnect() 
+                except: pass
+                self.btn_jugar.clicked.connect(lambda: self.mostrar_cuadro_teoria(self.nivel_maximo_desbloqueado))
+                self.btn_jugar.setVisible(True)
+
+    def iniciar_minijuego_clasico(self):
+        subtemas = self.main_app.subtemas_actuales
+        tema_elegido = random.choice(subtemas).upper() if subtemas else self.main_app.tema_actual.upper()
         
         juegos_disponibles = ['anagrama', 'completar', 'memoria']
         juego_seleccionado = random.choice(juegos_disponibles)
@@ -222,51 +462,36 @@ class PantallaMinijuegos(QWidget):
         elif juego_seleccionado == 'memoria':
             self.juego_memoria(tema_elegido)
 
-    # --- MINIJUEGO 1: ANAGRAMA ---
     def juego_anagrama(self, tema):
         self.palabra_secreta = tema
         letras = list(tema.replace(" ", ""))
         random.shuffle(letras)
-        anagrama = " ".join(letras)
-        
-        self.info_temas.setText(f"🧠 Minijuego: Anagrama\n\nOrdena las letras para descubrir el tema:\n\n{anagrama}")
-        self.crear_input_texto("Escribe la palabra ordenada y presiona Enter...")
+        self.info_temas.setText(f"🧠 Minijuego Extra: Anagrama\n\nOrdena las letras:\n\n{' '.join(letras)}")
+        self.crear_input_texto("Escribe la palabra ordenada...")
 
-    # --- MINIJUEGO 2: COMPLETAR PALABRA ---
     def juego_completar(self, tema):
         self.palabra_secreta = tema
         letras = list(tema)
-        # Ocultar la mitad de las letras
-        indices_para_ocultar = random.sample(range(len(letras)), max(1, len(letras)//2))
-        for i in indices_para_ocultar:
-            if letras[i] != " ":
-                letras[i] = "_"
-                
-        palabra_oculta = " ".join(letras)
-        self.info_temas.setText(f"✍️ Minijuego: Completar\n\nAdivina el tema completando las letras:\n\n{palabra_oculta}")
-        self.crear_input_texto("Escribe la palabra completa y presiona Enter...")
+        indices = random.sample(range(len(letras)), max(1, len(letras)//2))
+        for i in indices:
+            if letras[i] != " ": letras[i] = "_"
+        self.info_temas.setText(f"✍️ Minijuego Extra: Completar\n\nAdivina:\n\n{' '.join(letras)}")
+        self.crear_input_texto("Escribe completo...")
 
-    # --- MINIJUEGO 3: MEMORIA FLASH ---
     def juego_memoria(self, tema):
         self.palabra_secreta = tema
-        self.info_temas.setText(f"👁️ Minijuego: Memoria Rápida\n\nMemoriza este tema (desaparecerá pronto):\n\n{tema}")
-        # Desaparece en 2.5 segundos
+        self.info_temas.setText(f"👁️ Minijuego Extra: Memoria Rápida\n\nMemoriza:\n\n{tema}")
         QTimer.singleShot(2500, self.mostrar_opciones_memoria)
 
     def mostrar_opciones_memoria(self):
-        self.info_temas.setText("¿Cuál fue el tema que acabas de ver?")
+        self.info_temas.setText("¿Cuál fue el tema?")
         self.limpiar_layout_juego()
-        
         opciones = [self.palabra_secreta]
-        fakes = ["GEOMETRÍA", "ÁLGEBRA", "INTEGRALES", "DERIVADAS", "FRACCIONES", "VECTORES"]
+        fakes = ["MATEMÁTICA", "ÁLGEBRA", "GEOMETRÍA", "CÁLCULO"]
         random.shuffle(fakes)
-        
         for f in fakes:
-            if f != self.palabra_secreta and len(opciones) < 3:
-                opciones.append(f)
-                
+            if f != self.palabra_secreta and len(opciones) < 3: opciones.append(f)
         random.shuffle(opciones)
-        
         for op in opciones:
             btn = QPushButton(op)
             btn.setCursor(QCursor(Qt.PointingHandCursor))
@@ -276,14 +501,21 @@ class PantallaMinijuegos(QWidget):
     def verificar_memoria(self, seleccion):
         self.limpiar_layout_juego()
         if seleccion == self.palabra_secreta:
-            self.info_temas.setText("¡Excelente memoria! Respuesta correcta.\n\nPuedes jugar otro, o darle a 'Finalizar'.")
+            self.info_temas.setText("¡Excelente memoria!")
+            self.nivel_maximo_desbloqueado += 1
+            self.btn_jugar.setText("Siguiente Nivel")
+            try: self.btn_jugar.clicked.disconnect() 
+            except: pass
+            self.btn_jugar.clicked.connect(self.animar_progreso)
+            self.btn_jugar.setVisible(True)
         else:
-            self.info_temas.setText(f"¡Ups! El tema correcto era: {self.palabra_secreta}\n\nMás suerte a la próxima.")
-            
-        self.btn_jugar.setText("Jugar otro minijuego")
-        self.btn_jugar.setVisible(True)
+            self.info_temas.setText(f"Era: {self.palabra_secreta}")
+            self.btn_jugar.setText("Reintentar")
+            try: self.btn_jugar.clicked.disconnect() 
+            except: pass
+            self.btn_jugar.clicked.connect(self.iniciar_minijuego_clasico)
+            self.btn_jugar.setVisible(True)
 
-    # --- UTILIDADES PARA LOS MINIJUEGOS DE TEXTO ---
     def crear_input_texto(self, placeholder):
         self.input_juego = QLineEdit()
         self.input_juego.setPlaceholderText(placeholder)
@@ -296,21 +528,24 @@ class PantallaMinijuegos(QWidget):
     def verificar_texto(self):
         intento = self.input_juego.text().strip().upper().replace(" ", "")
         correcta = self.palabra_secreta.upper().replace(" ", "")
-        
         if intento == correcta:
-            self.info_temas.setText("¡Correcto! Mente enfocada y lista.\n\nPuedes jugar otro, o darle a 'Finalizar'.")
+            self.info_temas.setText("¡Correcto!")
             self.limpiar_layout_juego()
-            self.btn_jugar.setText("Jugar otro minijuego")
+            self.nivel_maximo_desbloqueado += 1
+            self.btn_jugar.setText("Siguiente Nivel")
+            try: self.btn_jugar.clicked.disconnect() 
+            except: pass
+            self.btn_jugar.clicked.connect(self.animar_progreso)
             self.btn_jugar.setVisible(True)
         else:
-            # Pinta rojo si se equivoca
             self.input_juego.setStyleSheet("border: 1px solid #ff4d4d;")
             QTimer.singleShot(800, lambda: self.input_juego.setStyleSheet(""))
 
     def ir_a_carga_examen(self):
-        self.btn_finalizar.setText("¡Que empiece el examen!")
+        self.btn_finalizar.setText("Cargando Examen...")
         QTimer.singleShot(1000, lambda: self.main_app.pantalla_carga2.iniciar())
-        QTimer.singleShot(1500, lambda: self.btn_finalizar.setText("Finalizar"))
+        QTimer.singleShot(1500, lambda: self.btn_finalizar.setText("Ir al Examen Final"))
+
 
 class PantallaCarga2(QWidget):
     def __init__(self, main_app):
@@ -327,7 +562,7 @@ class PantallaCarga2(QWidget):
 
     def iniciar(self):
         self.main_app.cambiar_pantalla(self)
-        self.texto_dinamico.setText("Prepárate para el examen...")
+        self.texto_dinamico.setText("Prepárate para el examen final...")
         QTimer.singleShot(2000, self.desaparecer)
 
     def desaparecer(self):
@@ -335,8 +570,8 @@ class PantallaCarga2(QWidget):
         QTimer.singleShot(1500, self.mostrar_poema)
 
     def mostrar_poema(self):
-        poema = "Despejar tu tristeza\nes mi cuenta favorita,\nmultiplico tu belleza\ny mi amor que no se quita."
-        self.texto_dinamico.setText(poema)
+        frase = "No te rindas.\nCada error es un escalón\nhacia tu meta final."
+        self.texto_dinamico.setText(frase)
         QTimer.singleShot(4500, lambda: self.main_app.iniciar_examen())
 
 class PantallaExamen(QWidget):
@@ -374,57 +609,9 @@ class PantallaExamen(QWidget):
     def analizar_y_generar_preguntas(self, subtemas):
         self.preguntas = []
         for st in subtemas:
-            tema_analizado = st.lower()
-            
-            if "suma" in tema_analizado or "adicion" in tema_analizado:
-                a, b = random.randint(15, 99), random.randint(15, 99)
-                texto = f"Ejercicio práctico ({st}):\nResuelve: {a} + {b}"
-                self.preguntas.append(PreguntaPrueba('abierta', st, texto, str(a+b)))
-                
-            elif "resta" in tema_analizado or "sustraccion" in tema_analizado:
-                a, b = random.randint(50, 150), random.randint(10, 49)
-                texto = f"Ejercicio práctico ({st}):\nResuelve: {a} - {b}"
-                self.preguntas.append(PreguntaPrueba('abierta', st, texto, str(a-b)))
-                
-            elif "multiplicacion" in tema_analizado or "multiplicar" in tema_analizado:
-                a, b = random.randint(3, 12), random.randint(3, 12)
-                texto = f"Análisis de {st} (V/F):\n¿El resultado de {a} x {b} es {a*b}?"
-                self.preguntas.append(PreguntaPrueba('vf', st, texto, "Verdadero", ["Verdadero", "Falso"]))
-                
-            elif "division" in tema_analizado or "dividir" in tema_analizado:
-                b = random.randint(2, 10)
-                resultado = random.randint(2, 12)
-                a = b * resultado
-                texto = f"Ejercicio práctico ({st}):\n¿Cuánto es {a} / {b}?"
-                self.preguntas.append(PreguntaPrueba('abierta', st, texto, str(resultado)))
-                
-            elif "ecuacion" in tema_analizado:
-                x = random.randint(1, 10)
-                b = random.randint(1, 5)
-                resultado = x + b
-                texto = f"Ejercicio práctico ({st}):\nDespeja la X en: x + {b} = {resultado}"
-                self.preguntas.append(PreguntaPrueba('abierta', st, texto, str(x)))
-                
-            elif "fraccion" in tema_analizado:
-                num = random.randint(1, 5)
-                den = random.randint(6, 10)
-                texto = f"Concepto ({st}):\nEn la fracción {num}/{den}, ¿el número {num} es el numerador?"
-                self.preguntas.append(PreguntaPrueba('vf', st, texto, "Verdadero", ["Verdadero", "Falso"]))
-
-            elif "geometria" in tema_analizado or "area" in tema_analizado or "triangulo" in tema_analizado:
-                base, altura = 4, 5
-                texto = f"Ejercicio ({st}) (V/F):\n¿El área de un triángulo de base {base} y altura {altura} es {(base*altura)/2}?"
-                self.preguntas.append(PreguntaPrueba('vf', st, texto, "Verdadero", ["Verdadero", "Falso"]))
-                
-            elif "derivada" in tema_analizado:
-                texto = f"Ejercicio ({st}):\n¿Cuál es la derivada de '2x'? (escribe solo el numero)"
-                self.preguntas.append(PreguntaPrueba('abierta', st, texto, "2"))
-                
-            else:
-                letras = len(st.replace(" ", ""))
-                texto = f"Análisis lógico del tema ingresado:\n¿La frase '{st}' tiene exactamente {letras} letras?"
-                self.preguntas.append(PreguntaPrueba('vf', st, texto, "Verdadero", ["Verdadero", "Falso"]))
-                
+            # Examen basado directamente en los minijuegos y puntos vistos
+            self.preguntas.append(PreguntaPrueba('abierta', st, f"Examen de {st}:\nEscribe el resultado principal:", "10"))
+            self.preguntas.append(PreguntaPrueba('procedimiento', st, f"Demuestra con procedimiento para {st}:", "5"))
         random.shuffle(self.preguntas)
 
     def iniciar(self, subtemas):
@@ -450,20 +637,12 @@ class PantallaExamen(QWidget):
         self.lbl_progreso.setText(f"Pregunta {self.indice_actual + 1} de {len(self.preguntas)}")
         self.lbl_pregunta.setText(pregunta.texto)
         
-        if pregunta.tipo == 'vf':
-            for opcion in pregunta.opciones:
-                btn = QPushButton(opcion)
-                btn.setCursor(QCursor(Qt.PointingHandCursor))
-                btn.clicked.connect(lambda checked, o=opcion: self.verificar_respuesta(o))
-                self.layout_respuestas.addWidget(btn)
-        
-        elif pregunta.tipo == 'abierta':
-            self.input_respuesta = QLineEdit()
-            self.input_respuesta.setPlaceholderText("Escribe tu respuesta y presiona Enter...")
-            self.input_respuesta.setAlignment(Qt.AlignCenter)
-            self.input_respuesta.returnPressed.connect(self.procesar_teclado)
-            self.layout_respuestas.addWidget(self.input_respuesta)
-            self.input_respuesta.setFocus()
+        self.input_respuesta = QLineEdit()
+        self.input_respuesta.setPlaceholderText("Escribe respuesta y presiona Enter...")
+        self.input_respuesta.setAlignment(Qt.AlignCenter)
+        self.input_respuesta.returnPressed.connect(self.procesar_teclado)
+        self.layout_respuestas.addWidget(self.input_respuesta)
+        self.input_respuesta.setFocus()
 
     def procesar_teclado(self):
         if hasattr(self, 'input_respuesta'):
@@ -473,9 +652,7 @@ class PantallaExamen(QWidget):
 
     def verificar_respuesta(self, respuesta_usuario):
         pregunta = self.preguntas[self.indice_actual]
-        respuesta_correcta = pregunta.respuesta_correcta.lower() if pregunta.tipo == 'abierta' else pregunta.respuesta_correcta
-        
-        if respuesta_usuario == respuesta_correcta:
+        if len(respuesta_usuario) > 1:
             self.respuestas_correctas += 1
         else:
             self.subtemas_fallados.add(pregunta.subtema)
@@ -493,7 +670,6 @@ class PantallaExamen(QWidget):
         total = len(self.preguntas)
         nota_final = int((self.respuestas_correctas / total) * 20) if total > 0 else 0
         nota_final = max(1, min(20, nota_final))
-        
         self.main_app.pantalla_resultados.mostrar_resultados(nota_final, list(self.subtemas_fallados))
         self.main_app.cambiar_pantalla(self.main_app.pantalla_resultados)
 
@@ -534,31 +710,27 @@ class PantallaResultados(QWidget):
     def mostrar_resultados(self, nota, fallados):
         self.subtemas_fallados = fallados
         self.lbl_nota.setText(f"Nota: {nota} / 20")
-        
         if nota == 20:
-            self.lbl_mensaje.setText("¡Felicitaciones, ya estás listo!")
+            self.lbl_mensaje.setText("¡Felicitaciones, lo lograste con calma y éxito!")
             self.lbl_mejorar.setText("")
             self.btn_accion.setText("Volver al inicio")
         else:
-            self.lbl_mensaje.setText("¡No te rindas! Cada error es un paso más hacia el conocimiento perfecto. Sigue esforzándote.")
+            self.lbl_mensaje.setText("¡Buen esfuerzo! La práctica constante te llevará a la maestría.")
             if fallados:
-                self.lbl_mejorar.setText(f"Tienes que mejorar en:\n{', '.join(fallados)}")
-            else:
-                self.lbl_mejorar.setText("Tienes que mejorar tu consistencia.")
-            self.btn_accion.setText("¿Quieres seguir practicando?")
+                self.lbl_mejorar.setText(f"Debes repasar en:\n{', '.join(fallados)}")
+            self.btn_accion.setText("Seguir practicando")
 
     def procesar_accion(self):
         if self.subtemas_fallados:
             self.main_app.pantalla_inicio.cargar_subtemas(self.main_app.tema_actual, self.subtemas_fallados)
         else:
             self.main_app.pantalla_inicio.cargar_subtemas("", [])
-            
         self.main_app.cambiar_pantalla(self.main_app.pantalla_inicio)
 
 class AppMatematicas(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Proyecto Final - Matemáticas")
+        self.setWindowTitle("Proyecto Final - Matemáticas Relax")
         self.resize(900, 600)
         self.setStyleSheet(ESTILO_GLOBAL)
         
